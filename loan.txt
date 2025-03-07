@@ -1,0 +1,97 @@
+PROC IMPORT DATAFILE="/home/u64154586/project4RESUME/Loan_default.csv"
+			DBMS=CSV
+			OUT=LOAN.predict;
+			GETNAMES=YES;
+			RUN;
+			
+DATA LOAN.predict_RAW;
+SET 	LOAN.predict;
+RUN;
+
+PROC MEANS DATA=loan.predict N NMISS;
+RUN;		
+	
+	
+	PROC FREQ DATA=LOAN.predict;
+	TABLES education employement_type loan_purpose mortgage ; 
+	RUN;
+/* step1 renaming the variables	 */
+DATA LOAN.predict;
+SET 	LOAN.predict_RAW;
+RENAME "LoanID"n=loan_id
+		"Age"n=age
+		"Income"n=income
+		"LoanAmount"n=loan_amount
+		"MaritalStatus"n=martial_status
+		"LoanTerm"n=loan_term
+		"LoanPurpose"n=loan_purpose
+		"InterestRate"n=interest_rate
+		"HasMortgage"n=mortgage
+		"HasDependents"n=dependents
+		"HasCoSigner"n=co_signer
+		"EmploymentType"n=employement_type
+		"Education"n=education
+		"DTIRatio"n=dti_ratio
+		"Default"n=default
+		"CreditScore"n=credit_score
+		"MonthsEmployed"n=months_employed
+		"NumCreditLines"n=num_credit_lines
+		;
+		RUN;
+/* modifiying and adding variables		 */
+DATA loan.predict;
+SET loan.predict;
+LENGTH default_status $20;
+IF Default=0 THEN default_status="Paid on Time";
+ELSE IF Default=1 THEN default_status="Failed to pay";
+RUN;
+/* checking the duplicates by primary key */
+		PROC SQL PRINT ;
+		SELECT STRIP(UPCASE(loan_id)),count(*) AS duplicate_count
+		FROM loan.predict
+		WHERE loan_id is not NULL
+		GROUP BY loan_id
+		HAVING duplicate_count>1;
+		QUIT;
+		
+		PROC SORT DATA=loan.predict NODUPKEY;
+		BY loan_id;
+		RUN;
+		
+	PROC SQL;
+    SELECT COUNT(loan_id) AS non_missing_values, 
+           COUNT(*) AS total_observations
+    FROM loan.predict;
+QUIT;
+
+/* Implementing the simple linear regression model */
+
+/* step1
+/* Split your dataset into 70% training and 30% testing to evaluate the model's performance. */
+	
+DATA train test;
+SET loan.predict;
+IF RANUNI(1234) <0.7 THEN OUTPUT train; /* 70% training*/
+ELSE OUTPUT test; /* 30% test*/
+RUN;
+
+
+/* step2 checking the corelation between y and variable */
+/* this is not having good relation ship  */
+PROC CORR DATA=train;
+VAR credit_score interest_rate;
+RUN;
+
+
+
+PROC REG DATA=train;
+MODEL interest_rate =credit_score ;
+OUTPUT OUT=loan.predicted_train P=Predicted_interest_rate;
+RUN;
+QUIT;
+
+
+
+
+
+
